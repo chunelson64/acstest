@@ -1,123 +1,86 @@
-# Azure Communication Services Quick Starter
+# Azure Communication Services calling demo
 
-[Azure Communication Services (ACS)](https://azure.microsoft.com/en-us/services/communication-services) is a set of rich communication APIs, video APIs, and SMS APIs for deploying your applications across any device, on any platform. If you’re looking on enabling **chat**, **audio/video** conferencing, **phone calls** or **SMS** inside an existing app, you should have a look to this service. Please read [our ACS documentation](https://docs.microsoft.com/en-us/azure/communication-services/) to know more. 
+A plain JavaScript calling application with a TypeScript Azure Functions API, hosted by Azure Static Web Apps (SWA). It demonstrates browser audio/video calls and joining a Microsoft Teams meeting as an ACS participant. This is a demo, not a production service or a tested Azure deployment.
 
-This repo is used as a starter for a _very basic_ HTML web application using no front-end frameworks. It shows how to map an identity provided by a [Static Web App](https://docs.microsoft.com/en-us/azure/static-web-apps/overview) (Github, Microsoft, Twitter or Google) to an ACS identity. You can then **deploy this sample is a couple of minutes** following the instructions below and share the URL to the web app to **do calls to another user using ACS** or to **join a Microsoft Teams meeting** like described in this video: 
+**Lifecycle:** Microsoft's [ACS retirement and breaking-changes guide](https://learn.microsoft.com/azure/communication-services/acs-retirement-and-breaking-changes-guide) sets September 30, 2028 as the end of support for standalone ACS scenarios. Supported Teams-aligned scenarios continue with SDK and scenario requirements. For a new long-lived voice/AI prototype, validate the Teams integration path; adding an AI service alone does not establish continued support.
 
-[![Watch the video](https://img.youtube.com/vi/Jbf50SL1ceI/0.jpg)](https://youtu.be/Jbf50SL1ceI)
+## Verify locally without Azure
 
-This repo also contains a more advanced **Metaverse demo** allowing to **call someone in Teams from a VR environment** running in the browser like demonstrated in this short video: 
+Use Node.js 22 (see `.nvmrc`) and npm 10 or newer. Node 22 is supported by SWA managed Functions; do not substitute Node 24 until SWA lists it. Node 22's support horizon is April 2027, so plan the next runtime update.
 
-[![Watch the video](https://img.youtube.com/vi/Wd4qNeLV_P8/0.jpg)](https://youtu.be/Wd4qNeLV_P8)
+```sh
+npm ci
+npm ci --prefix api
+npm run verify
+npm run package:api
+npm ci --omit=dev --prefix .deployment/api
+```
 
-## How to deploy the sample in minutes
+`verify` runs authorization, identity lifecycle, browser token-client and deployment-contract tests, compiles the API and builds all three browser entry points. Tests use fake Azure services and never mint real tokens. Production bundles and static files go to `dist/`; compiled Functions go to `api/dist/`. Generated bundles are not committed.
 
-You've got 2 options:
-- Follow the steps just below
-- Or watch this step-by-step video: https://youtu.be/Booa7ZrW0og
+With [Bicep CLI 0.48.1](https://github.com/Azure/bicep/releases/tag/v0.48.1), validate the infrastructure locally:
 
-### Step 1 - copy this repo in your Github repositories
+```sh
+bicep build infra/azuredeploy.bicep
+bicep build infra/main.bicep
+git diff --exit-code -- infra/azuredeploy.json infra/main.json
+```
 
-First, you need to be logged in on Github and then press on the green "**use this template**" button:
+CI runs these checks on pushes and pull requests **without Azure credentials or deployments**. See [the review and verification record](docs/modernization.md) for exact versions, limitations and results.
 
-![Use This Template Button](./images/acsquicktesttemplatebutton.jpg)
+## Run the local demo
 
-Then fill the required properties, be sure to make it public and press "**Create repository from template**" button:
+Local emulator tools have their own lockfile so they are not installed in CI or deployed with the app:
 
-![Creating the repo from the template](./images/acsquicktesttemplatebutton002.jpg)
+```sh
+npm ci --prefix tools
+# Copy, do not rename, the example file:
+cp api/local.settings.sample.json api/local.settings.json
+npm start
+```
 
-### Step 2 - provision all required resources using the 'Deploy To Azure' button
+On PowerShell use `Copy-Item api/local.settings.sample.json api/local.settings.json`. Set `ACS_ConnectionString` and `MyAccount_COSMOSDB` in the copied file for real calls. The database is `ACS`, container `users`, partition key `/id`. These are Azure resource credentials; never put them in browser code, commits, screenshots or logs. `AzureWebJobsStorage` may stay empty for this HTTP-only local demo; the host can emit a storage health warning. If the installed host requires storage, use Azurite locally with `UseDevelopmentStorage=true`.
 
-This will copy this repo into your Github account. Simply click on the "**Deploy To Azure**" button below (ctrl+click to open it in a separate tab to avoid loosing instructions):
+Visit `http://localhost:4280`, sign in through the SWA emulator and add `acs-user` to the emulated roles. This simulates authentication; it does not verify a real Microsoft/GitHub login. Without Azure credentials, an authorized token request returns a controlled 503. Test/build commands above do not need these settings.
 
-[![Deploy To Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg?sanitize=true)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fdavrous%2Facsauth%2Fmain%2Finfra%2Fazuredeploy.json)
+Open two signed-in browsers and share the **ACS user ID** displayed on screen, or enter a Teams meeting link. Email/username lookup was removed to prevent account enumeration and caller-selected token issuance. `/testacs.html` accepts a manually supplied ACS token; it cannot renew that token. `/vr.html` is an experimental legacy demo with external preview scripts and a media-device monkey patch; it needs a separate browser/WebXR review before use beyond a lab.
 
-In the various regions you'll choose, this will create a dedicated resource group (named rg-*yourname*) and will automatically deploy inside it:
+The default login choices are Microsoft Entra ID and GitHub. Other providers require explicit SWA custom-auth configuration and are not offered by this patch.
 
-- an [Azure Communication Services](https://docs.microsoft.com/en-us/azure/communication-services/) resource 
-- a [Cosmos DB](https://docs.microsoft.com/en-us/azure/cosmos-db/) that will store the mapping records of social accounts with ACS identities & tokens
-- a [Static Web App](https://docs.microsoft.com/en-us/azure/static-web-apps/) containing an [Azure Function](https://docs.microsoft.com/en-us/azure/azure-functions/) that will be already configured to point to the Cosmos DB & ACS connection strings 
+## Authentication and existing data
 
-### Step 3 - Grab the Static Web App deployment token from the Azure Portal
+The only token endpoint is `POST /api/users/me`, with `x-acs-client: web`. SWA and the API both require the `acs-user` role; invite approved users through SWA role management. A signed-in account alone is insufficient. The API derives its Cosmos key from the gateway's provider and stable user ID, issues a fresh one-hour `voip` token, and stores only the ACS identity mapping. Browser credentials refresh proactively.
 
-Once completed, you'll have a similar screen indicating your deployment is complete:
+The `x-ms-client-principal` header is trustworthy only behind the SWA managed API gateway. It is base64 JSON, not a signed token. Do not publish this Function as an independently reachable anonymous endpoint or expose the local emulator to the internet. A separate Functions deployment needs independent token validation and access restrictions.
 
-![Template deployment completed screen](./images/acsquicktesttemplatebutton004.jpg)
+New mapping keys start with `v2-`. Legacy email-keyed records and cached bearer tokens are deliberately not adopted, read or automatically deleted. Users get a new mapping once when moving to this version. If an old deployment exists, review access logs, revoke old ACS tokens as appropriate and plan operator-controlled cleanup. Renaming/recreating the SWA resource or deleting/readding a SWA user can change its user ID; mappings do not automatically migrate across applications.
 
-We're almost done! We now need to associate your Github repo with the freshly provisioned Azure Static Web App. For that, open the new resource group just created by clicking on it. It should be named "rg-*yourname*" like in the above screenshot. You'll then see the 3 resources created inside this resource group:
+## Provisioning and deployment are separate, manual operations
 
-![3 resources created: a Communication Service, a Cosmos DB & a Static Web App](./images/acsquicktesttemplatebutton005.jpg)
+No Azure resources were inspected or changed as part of this patch. First inventory any existing SWA, ACS and Cosmos resources and review [the subscription checklist](docs/modernization.md#azure-and-teams-checklist). Provisioning can incur charges and may overwrite app settings on existing resources. Prefer a separate development resource group.
 
-Click on the Static Web App named "sttapp-*yourname*" then click on the "**Manage deployment token**" button and copy to the clipboard the secret token.
+After Azure CLI login and selecting the intended subscription, preview the **checked-out repository template**:
 
-![Azure SWA deployment token screen](./images/acsquicktesttemplatebutton006.jpg)
+```sh
+az account set --subscription YOUR_SUBSCRIPTION_ID
+az deployment sub what-if --location eastus2 --template-file infra/azuredeploy.bicep --parameters name=YOUR_UNIQUE_NAME location='East US 2' cosdbaPrimaryRegion='East US 2' sttappLocation='East US 2'
+```
 
-### Step 4 - Copy the Static Web App deployment token as a secret in your Github repo
+Use a globally unique lowercase alphanumeric/hyphen name, 3–36 characters. Review region availability, ACS eligibility, Cosmos serverless capacity, costs and data residency. Only after reviewing the what-if, run the same command with `create` instead of `what-if` to provision. The templates create ACS, Cosmos `ACS/users` and SWA and pass keys directly to SWA settings; deployment outputs contain names/URL only. The optional PowerShell helper `infra/Provision-Resources.ps1 -ResourceName NAME -WhatIf` previews changes and no longer uses the create command for a preview.
 
-Now to be able to run your GitHub Actions workflow to deploy the ACS sample demonstrated in the videos, you need to store the Static Web App deployment token in a secret value named `AZURE_STATIC_WEB_APPS_API_TOKEN`. For that, go into the **Settings** of your Github repo and then navigate to the **Secrets->Actions** section to create a **New repository secret** key.
+Once this patch is merged to `main`, the optional portal button uses **this repository's** generated template (not the original upstream repository). It provisions resources only; it does not deploy the application:
 
-![Github secret key for SWA deployment](./images/acsquicktesttemplatebutton007.jpg)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchunelson64%2Facstest%2Fmain%2Finfra%2Fazuredeploy.json)
 
-### Step 5 - Run the Github Actions deployment workflow
+To deploy a reviewed version:
 
-You finally need to run the workflow configured in this repo to deploy the code of the SWA to your Azure subscription. There are various ways to do that as the workflow is listening for either **push to the main branch** or **Pull Request**.
+1. Create a GitHub environment named `azure-production`, restrict it to `main`, and configure required reviewers where available.
+2. Obtain the intended SWA resource's deployment token from Azure and store it in that environment as `AZURE_STATIC_WEB_APPS_API_TOKEN`. Review/remove stale repository-level copies. Do not use a GitHub PAT or subscription service-principal secret for this workflow.
+3. Merge the reviewed patch, then explicitly run **Deploy to Azure (manual)** from `main`. It reruns verification, stages only the compiled API and locked runtime dependencies, and uploads `dist/` and `.deployment/api/`. Pushes and PRs never trigger deployment in this version.
+4. Invite test users with the `acs-user` role; verify unauthenticated/unauthorized requests are rejected. Verify token refresh, two-browser audio/video, and Teams joining/lobby behavior before promoting this demo's use.
 
-The easier way: simply **do a fake commit to the readme.md file** and this will trigger the deployment:
-
-![Github Actions workflow completed screen](./images/acsquicktesttemplatebutton009.jpg)
-
-Once the workflow succeeded, navigate to the SWA URL that can be found in your Azure Portal:
-
-![Navigating to the URL of the Static Web App from the Azure Portal](./images/acsquicktesttemplatebutton008.jpg)
-
-And you should now be able to run the same demo as shown in this [YouTube video](https://youtu.be/Jbf50SL1ceI).
-
-Still lost? Please check [this step-by-step tutorial video](https://youtu.be/Booa7ZrW0og).
-
-To know more about those samples, please read this blog article: [AVAILABLE SOON]
-
-## Concepts used in this sample
-### Azure Communication Services
-- [Identity concept](https://docs.microsoft.com/en-us/azure/communication-services/concepts/identity-model)
-- [Calling concept](https://docs.microsoft.com/en-us/azure/communication-services/concepts/voice-video-calling/about-call-types)
-- [Teams interoperability concept](https://docs.microsoft.com/en-us/azure/communication-services/concepts/teams-interop)
-- [Quickstart: Create and manage access tokens](https://docs.microsoft.com/en-us/azure/communication-services/quickstarts/access-tokens?pivots=programming-language-javascript)
-- [QuickStart: Add 1:1 video calling to your app](https://docs.microsoft.com/en-us/azure/communication-services/quickstarts/voice-video-calling/get-started-with-video-calling)
-- [Quickstart: Join your calling app to a Teams meeting](https://docs.microsoft.com/en-us/azure/communication-services/quickstarts/voice-video-calling/get-started-teams-interop)
-
-### Azure Static Web App
-- [Authentication and authorization for Azure Static Web Apps](https://docs.microsoft.com/en-us/azure/static-web-apps/authentication-authorization)
-- [Azure Cosmos DB input binding for Azure Functions 2.x and higher](https://docs.microsoft.com/en-us/azure/azure-functions/functions-bindings-cosmosdb-v2-input)
-- [Azure Cosmos DB output binding for Azure Functions 2.x and higher](https://docs.microsoft.com/en-us/azure/azure-functions/functions-bindings-cosmosdb-v2-output)
-
-## Metaverse demo
-Once deployed, the VR / metaverse demo will be available under **/vr.html**
-
-![Screenshot of the Metaverse sample calling someone else in ACS](./images/acsmetaversesample.jpg)
-
-It works the same as the previous demo. You can either call someone using ACS or call someone inside a Microsoft Teams meeting. You can move inside the 3D scene using the arrows key (like a FPS game) or a gamepad controller. If launched in VR, you can use the VR controllers to teleport yourself like a classical VR game. 
-
-*`Note`: it uses a trick to replace on the fly the video feed of the selected webcam by a stream of the WebGL canvas as this scenario is currently not supported out of the box by the ACS SDK. You then need a webcam available on the device that will render the 3D scene.*
-
-To be able to replay as-is the demo showcased in [this YouTube video](https://youtu.be/Wd4qNeLV_P8), you need a WebXR compatible headset & browser. I’ve used my Valve Index inside Microsoft Edge in the demo. 
-
-This demo uses the [Babylon.js WebGL engine](https://www.babylonjs.com) supporting WebXR out of the box. 
-
-## Going Further
-
-- if you need a more advanced authentication layer, ready for production, have a look to our [Get started with the trusted authentication service hero sample](https://docs.microsoft.com/en-us/azure/communication-services/samples/trusted-auth-sample) documentation. It shows the same concept using Azure Active Directory (AAD) mapping with ACS. 
-- if you need a polished and ready to use UI library on top of the ACS SDK, read our [UI Library Overview](https://docs.microsoft.com/en-us/azure/communication-services/concepts/ui-library/ui-library-overview?pivots=platform-web)
-- this sample shows a great usage for this UI library: [Get started with the calling hero sample](https://docs.microsoft.com/en-us/azure/communication-services/samples/calling-hero-sample)
-
-## Running it on your dev machine
-
-If you clone the repo on your developer machine, here are the steps to make it works:
-
-- ```npm install``` -> this will install Webpack, some Azure Communication Services modules & the Azure Static Web App simulator & CLI
-- Rename *local.settings.sample.json* to *local.settings.json* and fill the 2 properties with the Azure Communication Services & CosmosDB connection strings you'll find in the Azure Portal
-- ```npm start``` -> this will start the Static Web App on http://localhost:4280 
-- ```npm run build``` -> if you'd like to modify the code of *videocalls.js*, *videocallsvr.js* & *testacs.js* and bundle them with Webpack
+The deployment token authorizes replacement of the selected SWA application. Environment review rules must be configured in GitHub; merely naming an environment in YAML does not create an approval requirement. No workflow here provisions Azure resources, writes GitHub secrets or posts PR comments.
 
 ## Credits
 
-I'd like to thank [Justin Yoo](https://twitter.com/justinchronicle) for his precious help on building the deployment scripts & logic of this repo. If you're interested in building similar deployments from your repo, Justin has written an awesome technical article about the job he's done: [Azure Apps Autopilot](https://dev.to/azure/azure-apps-autopilot-2ag8). 
+Based on David Rousset's ACS authentication/calling demo and Justin Yoo's original deployment work. Original demonstrations: [calling and Teams](https://youtu.be/Jbf50SL1ceI), [VR experiment](https://youtu.be/Wd4qNeLV_P8). Those videos describe the older deployment/authentication behavior; follow this README for this version.

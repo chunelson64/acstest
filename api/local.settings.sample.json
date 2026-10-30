@@ -1,8 +1,9 @@
 {
   "IsEncrypted": false,
   "Values": {
-    "MyAccount_COSMOSDB": "<PLEASE INSERT COSMOSDB CONNECTION STRING>",
-    "ACS_ConnectionString": "<PLEASE INSERT ACS CONNECTION STRING",
+    "AzureWebJobsStorage": "",
+    "MyAccount_COSMOSDB": "",
+    "ACS_ConnectionString": "",
     "FUNCTIONS_WORKER_RUNTIME": "node"
   }
 }

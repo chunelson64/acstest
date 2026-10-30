@@ -1,11 +1,17 @@
 {
-    "routes":[
-        {
-            "route": "/api/*",
-            "allowedRoles": ["authenticated"]
-        }
-    ],
-    "navigationFallback": {
-        "rewrite": "/index.html"
+  "platform": {
+    "apiRuntime": "node:22"
+  },
+  "routes": [
+    {
+      "route": "/api/*",
+      "allowedRoles": [
+        "acs-user"
+      ]
     }
+  ],
+  "globalHeaders": {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "same-origin"
+  }
 }

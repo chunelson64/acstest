@@ -1,3 +1,4 @@
+const { fetchIdentity, credentialOptions, resolveCallee } = require('./identity');
 // Make sure to install the necessary dependencies
 const { CallClient, VideoStreamRenderer, LocalVideoStream } = require('@azure/communication-calling');
 const { AzureCommunicationTokenCredential } = require('@azure/communication-common');
@@ -12,6 +13,7 @@ AzureLogger.log = (...args) => {
 
 // Calling web sdk objects
 let callAgent;
+let tokenCredential;
 let deviceManager;
 let call;
 let incomingCall;
@@ -21,7 +23,7 @@ let localCameras;
 let localMicrophones;
 let localSpeakers;
 let selectedCameraIndex = 0;
-// json ACS user object return by /api/users/{email}
+// json ACS user object return by POST /api/users/me
 let ACSUser;
 let authUserEmail = "";
 
@@ -35,9 +37,7 @@ let startVideoButton = document.getElementById('start-video-button');
 let stopVideoButton = document.getElementById('stop-video-button');
 let remoteVideoContainer = document.getElementById('remoteVideoContainer');
 let localVideoContainer = document.getElementById('localVideoContainer');
-let twitterLoginButton = document.getElementsByClassName('twitterButton')[0];
 let aadLoginButton = document.getElementsByClassName('aadButton')[0];
-let googleLoginButton = document.getElementsByClassName('googleButton')[0];
 let githubLoginButton = document.getElementsByClassName('githubButton')[0];
 let logoutButton = document.getElementsByClassName('logoutButton')[0];
 let callStateElement = document.getElementById('call-state');
@@ -58,18 +58,11 @@ async function getUserInfo() {
     }
 }
 
-// API call to convert an email ID to an ACS ID
-async function getUserAcsId(userEmail) {
-    try {
-        // Calling the API to just try to resolve an email with an existing ACS User ID created
-        const response = await fetch('/api/users/' + userEmail + '/true');
-        const payload = await response.json();
-        const { userId } = payload;
-        return userId;
-    } catch (error) {
-        console.error('No Acs User Id has been found for this email.');
-        return undefined;
-    }
+// Validate a shared ACS ID.
+async function getUserAcsId(value) {
+    const id = resolveCallee(value);
+    if (!id) alert('Enter the other person’s ACS user ID or a Teams meeting link.');
+    return id;
 }
 
 (async function() {
@@ -79,10 +72,8 @@ async function getUserAcsId(userEmail) {
         });
     }
 
-    registerLoginRouter(twitterLoginButton, "twitter");
     registerLoginRouter(aadLoginButton, "aad");
     registerLoginRouter(githubLoginButton, "github");
-    registerLoginRouter(googleLoginButton, "google");
 
     logoutButton.addEventListener("click", () => {
         window.location.href="/.auth/logout";
@@ -96,23 +87,15 @@ async function getUserAcsId(userEmail) {
     
     // We can  call the API to get an ACS User ID only if we've been authenticated
     if (authenticatedUser) {
-        // If MS provider, we'll get the email address to be used as the key for the DB
-        if (authenticatedUser.identityProvider == "aad" || authenticatedUser.identityProvider == "google") {
-            authUserEmail=authenticatedUser.userDetails;
-        }
-        // Otherwise, let's build keys as "davrous@twitter" or "davrous@github"
-        else {
-            authUserEmail=authenticatedUser.userDetails + "@" + authenticatedUser.identityProvider;
-        }
-        var ACSUserQuery = await fetch(`/api/users/`+ authUserEmail);
+        authUserEmail = authenticatedUser.userDetails;
         try {
-            ACSUser = await ACSUserQuery.json();
+            ACSUser = await fetchIdentity();
+        } catch (error) {
+            document.querySelector('#user_email').textContent = error.message;
+            document.querySelector('#loginZone').style.display = 'none';
+            document.querySelector('#logoutZone').style.display = 'block';
+            return;
         }
-        catch {
-            alert('Error while trying to call Azure Function API, please check your local.settings.json file contains valid ACS & CosmosDB connection strings.')
-        }
-        console.log("ACS User Token: " + ACSUser.userToken);
-        console.log("Valid until: " + ACSUser.expiresOn);
         document.querySelector('#acs_user_id').textContent = ACSUser.userId;
         document.querySelector('#user_email').textContent = authUserEmail;
         document.querySelector('#loginZone').style.display = "none";
@@ -198,7 +181,7 @@ async function fillDevicesSelectors() {
 async function initializeCallAgent() {
     try {
         const callClient = new CallClient(); 
-        tokenCredential = new AzureCommunicationTokenCredential(ACSUser.userToken);
+        tokenCredential = new AzureCommunicationTokenCredential(credentialOptions(ACSUser));
 
         callAgent = await callClient.createCallAgent(tokenCredential, {displayName: 'ACS:' + authUserEmail})
         // Set up a camera device to use.
@@ -248,7 +231,7 @@ startCallButton.onclick = async () => {
                 call = callAgent.join({meetingLink: meetingLink}, { videoOptions });
             }
             else {
-                // Converting email address to internal ACS User Id
+                // Use the ACS ID shared by the other participant.
                 let AcsUserId = await getUserAcsId(meetingLink);
                 if (AcsUserId) {
                     call = callAgent.startCall([{ communicationUserId: AcsUserId }], { videoOptions });  

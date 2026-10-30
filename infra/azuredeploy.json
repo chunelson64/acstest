@@ -4,13 +4,15 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.4.1272.37030",
-      "templateHash": "14358314786534631180"
+      "version": "0.48.1.52935",
+      "templateHash": "2880977364570828940"
     }
   },
   "parameters": {
     "name": {
-      "type": "string"
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 36
     },
     "location": {
       "type": "string",
@@ -187,7 +189,7 @@
     },
     {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2020-10-01",
+      "apiVersion": "2025-04-01",
       "name": "Resources",
       "resourceGroup": "[format('rg-{0}', parameters('name'))]",
       "properties": {
@@ -242,13 +244,15 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.4.1272.37030",
-              "templateHash": "14725715832211217714"
+              "version": "0.48.1.52935",
+              "templateHash": "16981738567745616684"
             }
           },
           "parameters": {
             "name": {
-              "type": "string"
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 36
             },
             "cosdbaLocation": {
               "type": "string",
@@ -343,7 +347,7 @@
           "resources": [
             {
               "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2020-10-01",
+              "apiVersion": "2025-04-01",
               "name": "CosmosDB",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -382,8 +386,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.4.1272.37030",
-                      "templateHash": "5995196354923220389"
+                      "version": "0.48.1.52935",
+                      "templateHash": "11260650516418705338"
                     }
                   },
                   "parameters": {
@@ -454,7 +458,7 @@
                       "name": "[format('cosdba-{0}', parameters('name'))]",
                       "location": "[parameters('cosdbaLocation')]",
                       "databaseAccountOfferType": "[parameters('cosdbaAccountOfferType')]",
-                      "enableAutomaticFailover": "[parameters('cosdbaAutomaticFailover')]",
+                      "enableAutomaticFailover": "[if(parameters('cosdbaEnableServerless'), false(), parameters('cosdbaAutomaticFailover'))]",
                       "defaultConsistencyLevel": "[parameters('cosdbaConsistencyLevel')]",
                       "primaryRegion": "[parameters('cosdbaPrimaryRegion')]",
                       "capabilities": "[variables('capabilities')]",
@@ -513,7 +517,7 @@
                     {
                       "type": "Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers",
                       "apiVersion": "2021-10-15",
-                      "name": "[format('{0}/{1}', format('{0}/{1}', variables('cosmosDb').name, variables('cosmosDb').databaseName), variables('cosmosDb').containerName)]",
+                      "name": "[format('{0}/{1}/{2}', variables('cosmosDb').name, variables('cosmosDb').databaseName, variables('cosmosDb').containerName)]",
                       "properties": {
                         "resource": {
                           "id": "[variables('cosmosDb').containerName]",
@@ -523,7 +527,7 @@
                         }
                       },
                       "dependsOn": [
-                        "[resourceId('Microsoft.DocumentDB/databaseAccounts/sqlDatabases', split(format('{0}/{1}', variables('cosmosDb').name, variables('cosmosDb').databaseName), '/')[0], split(format('{0}/{1}', variables('cosmosDb').name, variables('cosmosDb').databaseName), '/')[1])]"
+                        "[resourceId('Microsoft.DocumentDB/databaseAccounts/sqlDatabases', variables('cosmosDb').name, variables('cosmosDb').databaseName)]"
                       ]
                     }
                   ],
@@ -535,10 +539,6 @@
                     "name": {
                       "type": "string",
                       "value": "[variables('cosmosDb').name]"
-                    },
-                    "connectionString": {
-                      "type": "string",
-                      "value": "[format('AccountEndpoint=https://{0}.documents.azure.com:443/;AccountKey={1};', variables('cosmosDb').name, listKeys(resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDb').name), '2021-10-15').primaryMasterKey)]"
                     }
                   }
                 }
@@ -546,7 +546,7 @@
             },
             {
               "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2020-10-01",
+              "apiVersion": "2025-04-01",
               "name": "CommunicationServices",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -567,8 +567,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.4.1272.37030",
-                      "templateHash": "931333458372122921"
+                      "version": "0.48.1.52935",
+                      "templateHash": "8750819050284110461"
                     }
                   },
                   "parameters": {
@@ -621,10 +621,6 @@
                     "name": {
                       "type": "string",
                       "value": "[variables('commService').name]"
-                    },
-                    "connectionString": {
-                      "type": "string",
-                      "value": "[listKeys(resourceId('Microsoft.Communication/communicationServices', variables('commService').name), '2020-08-20').primaryConnectionString]"
                     }
                   }
                 }
@@ -632,7 +628,7 @@
             },
             {
               "type": "Microsoft.Resources/deployments",
-              "apiVersion": "2020-10-01",
+              "apiVersion": "2025-04-01",
               "name": "StaticWebApp",
               "properties": {
                 "expressionEvaluationOptions": {
@@ -656,10 +652,10 @@
                     "value": "[parameters('sttappStagingEnvironmentPolicy')]"
                   },
                   "acsvcConnectionString": {
-                    "value": "[reference(resourceId('Microsoft.Resources/deployments', 'CommunicationServices')).outputs.connectionString.value]"
+                    "value": "[listKeys(resourceId('Microsoft.Communication/communicationServices', format('acsvc-{0}', parameters('name'))), '2020-08-20').primaryConnectionString]"
                   },
                   "cosdbaConnectionString": {
-                    "value": "[reference(resourceId('Microsoft.Resources/deployments', 'CosmosDB')).outputs.connectionString.value]"
+                    "value": "[format('AccountEndpoint={0};AccountKey={1};', reference(resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosdba-{0}', parameters('name'))), '2021-10-15').documentEndpoint, listKeys(resourceId('Microsoft.DocumentDB/databaseAccounts', format('cosdba-{0}', parameters('name'))), '2021-10-15').primaryMasterKey)]"
                   }
                 },
                 "template": {
@@ -668,8 +664,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.4.1272.37030",
-                      "templateHash": "14989187034094535271"
+                      "version": "0.48.1.52935",
+                      "templateHash": "7840509826560997751"
                     }
                   },
                   "parameters": {
@@ -708,10 +704,10 @@
                       ]
                     },
                     "acsvcConnectionString": {
-                      "type": "secureString"
+                      "type": "securestring"
                     },
                     "cosdbaConnectionString": {
-                      "type": "secureString"
+                      "type": "securestring"
                     }
                   },
                   "variables": {
@@ -744,7 +740,7 @@
                     {
                       "type": "Microsoft.Web/staticSites/config",
                       "apiVersion": "2021-03-01",
-                      "name": "[format('{0}/appsettings', variables('staticApp').name)]",
+                      "name": "[format('{0}/{1}', variables('staticApp').name, 'appsettings')]",
                       "properties": {
                         "ACS_ConnectionString": "[variables('staticApp').connectionStrings.acs]",
                         "MyAccount_COSMOSDB": "[variables('staticApp').connectionStrings.cosmosDb]"
@@ -763,9 +759,9 @@
                       "type": "string",
                       "value": "[variables('staticApp').name]"
                     },
-                    "deploymentKey": {
+                    "url": {
                       "type": "string",
-                      "value": "[listSecrets(resourceId('Microsoft.Web/staticSites', variables('staticApp').name), '2021-03-01').properties.apiKey]"
+                      "value": "[format('https://{0}', reference(resourceId('Microsoft.Web/staticSites', variables('staticApp').name), '2021-03-01').defaultHostname)]"
                     }
                   }
                 }
@@ -777,17 +773,13 @@
             }
           ],
           "outputs": {
-            "cosdbaConnectionString": {
+            "staticWebAppName": {
               "type": "string",
-              "value": "[reference(resourceId('Microsoft.Resources/deployments', 'CosmosDB')).outputs.connectionString.value]"
+              "value": "[reference(resourceId('Microsoft.Resources/deployments', 'StaticWebApp'), '2025-04-01').outputs.name.value]"
             },
-            "acsvcConnectionString": {
+            "staticWebAppUrl": {
               "type": "string",
-              "value": "[reference(resourceId('Microsoft.Resources/deployments', 'CommunicationServices')).outputs.connectionString.value]"
-            },
-            "sttappDeploymentKey": {
-              "type": "string",
-              "value": "[reference(resourceId('Microsoft.Resources/deployments', 'StaticWebApp')).outputs.deploymentKey.value]"
+              "value": "[reference(resourceId('Microsoft.Resources/deployments', 'StaticWebApp'), '2025-04-01').outputs.url.value]"
             }
           }
         }
@@ -798,17 +790,17 @@
     }
   ],
   "outputs": {
-    "cosdbaConnectionString": {
+    "resourceGroupName": {
       "type": "string",
-      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-{0}', parameters('name'))), 'Microsoft.Resources/deployments', 'Resources')).outputs.cosdbaConnectionString.value]"
+      "value": "[format('rg-{0}', parameters('name'))]"
     },
-    "acsvcConnectionString": {
+    "staticWebAppName": {
       "type": "string",
-      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-{0}', parameters('name'))), 'Microsoft.Resources/deployments', 'Resources')).outputs.acsvcConnectionString.value]"
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-{0}', parameters('name'))), 'Microsoft.Resources/deployments', 'Resources'), '2025-04-01').outputs.staticWebAppName.value]"
     },
-    "sttappDeploymentKey": {
+    "staticWebAppUrl": {
       "type": "string",
-      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-{0}', parameters('name'))), 'Microsoft.Resources/deployments', 'Resources')).outputs.sttappDeploymentKey.value]"
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-{0}', parameters('name'))), 'Microsoft.Resources/deployments', 'Resources'), '2025-04-01').outputs.staticWebAppUrl.value]"
     }
   }
 }

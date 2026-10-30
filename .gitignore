@@ -1,1 +1,9 @@
 node_modules/
+dist/
+src/bundle*.js
+api/local.settings.json
+.env
+.env.*
+*.log
+.swa/
+.deployment/

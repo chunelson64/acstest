@@ -1,5 +1,7 @@
 targetScope = 'subscription'
 
+@minLength(3)
+@maxLength(36)
 param name string
 @allowed([
     'Australia Central'
@@ -165,6 +167,7 @@ module resources './main.bicep' = {
     }
 }
 
-output cosdbaConnectionString string = resources.outputs.cosdbaConnectionString
-output acsvcConnectionString string = resources.outputs.acsvcConnectionString
-output sttappDeploymentKey string = resources.outputs.sttappDeploymentKey
+
+output resourceGroupName string = rg.name
+output staticWebAppName string = resources.outputs.staticWebAppName
+output staticWebAppUrl string = resources.outputs.staticWebAppUrl
