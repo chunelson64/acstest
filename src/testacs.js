@@ -12,6 +12,7 @@ AzureLogger.log = (...args) => {
 
 // Calling web sdk objects
 let callAgent;
+let tokenCredential;
 let deviceManager;
 let call;
 let incomingCall;

@@ -1,21 +1,25 @@
 {
-  "name": "api",
+  "name": "acs-quickstarter-api",
   "version": "1.0.0",
-  "description": "",
+  "private": true,
+  "main": "dist/index.js",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
-    "build": "tsc",
+    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc",
     "watch": "tsc -w",
     "prestart": "npm run build",
-    "start": "func start",
-    "test": "echo \"No tests yet...\""
+    "start": "node ../tools/node_modules/azure-functions-core-tools/lib/main.js start --port 7071",
+    "test": "npm run build && node --test test/*.test.cjs"
   },
   "dependencies": {
-    "@azure/communication-identity": "^1.0.0",
-    "@aaronpowell/static-web-apps-api-auth": "0.1.3"
+    "@azure/communication-identity": "2.0.0",
+    "@azure/cosmos": "4.10.1",
+    "@azure/functions": "4.17.0"
   },
   "devDependencies": {
-    "@aaronpowell/static-web-apps-api-auth": "0.1.3",
-    "@azure/functions": "^1.2.3",
-    "typescript": "^4.0.0"
+    "@types/node": "22.20.5",
+    "typescript": "7.0.2"
   }
 }

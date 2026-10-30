@@ -121,7 +121,7 @@ function Show-Usage {
                                           it must be specified.
         -ResourceName                     Resource name.
         -Location                         Resource location.
-                                          Default is 'koreacentral'.
+                                          Default is 'West US'.
 
         -CosmosDbAccountOfferType         Cosmos DB account type.
                                           Default is 'Standard'.
@@ -130,17 +130,17 @@ function Show-Usage {
         -CosmosDbConsistencyLevel         Cosmos DB consistency level.
                                           Default is 'Session'.
         -CosmosDbPrimaryRegion            Cosmos DB primary region.
-                                          Default is 'Korea Central'.
+                                          Default is 'West US'.
         -CosmosDbEnableServerless         To enable serverless or not.
                                           Default is `$true.
         -CosmosDbBackupStorageRedundancy  Cosmos DB backup storage redundancy.
                                           Default is 'Local'.
 
         -CommunicationServiceDataLocation Data location for Communication Services.
-                                          Default is 'Korea'.
+                                          Default is 'United States'.
 
         -StaticWebAppLocation             Static Web App location.
-                                          Default is 'eastasia'.
+                                          Default is 'Central US'.
         -StaticWebAppSkuName              Static Web App SKU name.
                                           Default is 'Free'.
         -StaticWebAppAllowConfigFileUpdates
@@ -196,39 +196,20 @@ if ($TargetScope -eq "ResourceGroup") {
     $params.location = @{ value = $Location };
 }
 
-# Uncomment to debug
-# $params | ConvertTo-Json
-# $params | ConvertTo-Json -Compress
-# $params | ConvertTo-Json -Compress | ConvertTo-Json
-
-$stringified = $params | ConvertTo-Json -Compress | ConvertTo-Json
-
-# Provision the resources
-if ($WhatIf -eq $true) {
-    if ($TargetScope -eq "ResourceGroup") {
-        $result = az deployment group create -g $ResourceGroupName -n $TargetScope `
-            -f ./main.bicep `
-            -p $stringified `
-            -w
+# Use a parameter file to avoid shell-dependent JSON quoting.
+$parameterFile = Join-Path ([System.IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString() + '.json')
+try {
+    $params | ConvertTo-Json -Depth 10 | Set-Content -Path $parameterFile -Encoding utf8
+    $operation = if ($WhatIf) { 'what-if' } else { 'create' }
+    if ($TargetScope -eq 'ResourceGroup') {
+        $result = az deployment group $operation --resource-group $ResourceGroupName --name $TargetScope `
+            --template-file "$PSScriptRoot/main.bicep" --parameters "@$parameterFile"
     } else {
-        $result = az deployment sub create -l $Location -n $TargetScope `
-            -f ./azuredeploy.bicep `
-            -p $stringified `
-            -w
+        $result = az deployment sub $operation --location $Location --name $TargetScope `
+            --template-file "$PSScriptRoot/azuredeploy.bicep" --parameters "@$parameterFile"
     }
-
-} else {
-    if ($TargetScope -eq "ResourceGroup") {
-        $result = az deployment group create -g $ResourceGroupName -n $TargetScope `
-            -f ./main.bicep `
-            -p $stringified `
-            --verbose
-    } else {
-        $result = az deployment sub create -l $Location -n $TargetScope `
-            -f ./azuredeploy.bicep `
-            -p $stringified `
-            --verbose
-    }
+    if ($LASTEXITCODE -ne 0) { throw "Azure deployment command failed with exit code $LASTEXITCODE" }
+    $result
+} finally {
+    Remove-Item -Path $parameterFile -Force -ErrorAction SilentlyContinue
 }
-
-$result

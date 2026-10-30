@@ -34,4 +34,3 @@ resource acs 'Microsoft.Communication/communicationServices@2020-08-20' = {
 
 output id string = acs.id
 output name string = acs.name
-output connectionString string = acs.listKeys().primaryConnectionString

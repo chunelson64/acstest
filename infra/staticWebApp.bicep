@@ -54,7 +54,8 @@ resource sttapp 'Microsoft.Web/staticSites@2021-03-01' = {
 }
 
 resource sttappconfig 'Microsoft.Web/staticSites/config@2021-03-01' = {
-    name: '${sttapp.name}/appsettings'
+    parent: sttapp
+    name: 'appsettings'
     properties: {
         ACS_ConnectionString: staticApp.connectionStrings.acs
         MyAccount_COSMOSDB: staticApp.connectionStrings.cosmosDb
@@ -63,4 +64,5 @@ resource sttappconfig 'Microsoft.Web/staticSites/config@2021-03-01' = {
 
 output id string = sttapp.id
 output name string = sttapp.name
-output deploymentKey string = sttapp.listSecrets().properties.apiKey
+
+output url string = 'https://${sttapp.properties.defaultHostname}'

@@ -1,3 +1,5 @@
+@minLength(3)
+@maxLength(36)
 param name string
 
 // Cosmos DB
@@ -82,6 +84,7 @@ module acsvc './communicationServices.bicep' = {
 }
 
 module sttapp './staticWebApp.bicep' = {
+    dependsOn: [cosdba, acsvc]
     name: 'StaticWebApp'
     params: {
         name: name
@@ -89,11 +92,17 @@ module sttapp './staticWebApp.bicep' = {
         sttappSkuName: sttappSkuName
         sttappAllowConfigFileUpdates: sttappAllowConfigFileUpdates
         sttappStagingEnvironmentPolicy: sttappStagingEnvironmentPolicy
-        acsvcConnectionString: acsvc.outputs.connectionString
-        cosdbaConnectionString: cosdba.outputs.connectionString
+        acsvcConnectionString: acsResource.listKeys().primaryConnectionString
+        cosdbaConnectionString: 'AccountEndpoint=${cosmosResource.properties.documentEndpoint};AccountKey=${cosmosResource.listKeys().primaryMasterKey};'
     }
 }
 
-output cosdbaConnectionString string = cosdba.outputs.connectionString
-output acsvcConnectionString string = acsvc.outputs.connectionString
-output sttappDeploymentKey string = sttapp.outputs.deploymentKey
+
+resource acsResource 'Microsoft.Communication/communicationServices@2020-08-20' existing = {
+  name: 'acsvc-${name}'
+}
+resource cosmosResource 'Microsoft.DocumentDB/databaseAccounts@2021-10-15' existing = {
+  name: 'cosdba-${name}'
+}
+output staticWebAppName string = sttapp.outputs.name
+output staticWebAppUrl string = sttapp.outputs.url

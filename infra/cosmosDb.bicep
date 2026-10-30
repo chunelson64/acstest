@@ -42,7 +42,7 @@ var cosmosDb = {
     name: 'cosdba-${name}'
     location: cosdbaLocation
     databaseAccountOfferType: cosdbaAccountOfferType
-    enableAutomaticFailover: cosdbaAutomaticFailover
+    enableAutomaticFailover: cosdbaEnableServerless ? false : cosdbaAutomaticFailover
     defaultConsistencyLevel: cosdbaConsistencyLevel
     primaryRegion: cosdbaPrimaryRegion
     capabilities: capabilities
@@ -84,7 +84,8 @@ resource cosdba 'Microsoft.DocumentDB/databaseAccounts@2021-10-15' = {
 }
 
 resource cosdbasql 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2021-10-15' = {
-    name: '${cosdba.name}/${cosmosDb.databaseName}'
+    parent: cosdba
+    name: cosmosDb.databaseName
     properties: {
         resource: {
             id: cosmosDb.databaseName
@@ -93,7 +94,8 @@ resource cosdbasql 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2021-10-1
 }
 
 resource cosdbasqlcontainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2021-10-15' = {
-    name: '${cosdbasql.name}/${cosmosDb.containerName}'
+    parent: cosdbasql
+    name: cosmosDb.containerName
     properties: {
         resource: {
             id: cosmosDb.containerName
@@ -106,4 +108,3 @@ resource cosdbasqlcontainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/
 
 output id string = cosdba.id
 output name string = cosdba.name
-output connectionString string = 'AccountEndpoint=https://${cosdba.name}.documents.azure.com:443/;AccountKey=${cosdba.listKeys().primaryMasterKey};'
